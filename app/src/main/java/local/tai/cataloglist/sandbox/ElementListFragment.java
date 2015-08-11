@@ -3,23 +3,25 @@ package local.tai.cataloglist.sandbox;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.Activity;
+import android.app.FragmentManager;
+import android.app.FragmentTransaction;
+import android.app.ListFragment;
+import android.app.LoaderManager;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.CursorLoader;
+import android.content.Loader;
 import android.database.Cursor;
 import android.os.Bundle;
-import android.support.v4.app.ListFragment;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.content.CursorLoader;
-import android.support.v4.content.Loader;
-import android.support.v4.widget.SimpleCursorAdapter;
 import android.view.View;
+import android.widget.ListView;
+import android.widget.SimpleCursorAdapter;
 
 import local.tai.cataloglist.sandbox.provider.CatalogContract;
 
 
 public class ElementListFragment extends ListFragment
         implements LoaderManager.LoaderCallbacks<Cursor> {
-
 
     // An account type, in the form of a domain name
     public static final String ACCOUNT_TYPE = "local.tai.cataloglist";
@@ -43,6 +45,14 @@ public class ElementListFragment extends ListFragment
             android.R.id.text1
     };
     private SimpleCursorAdapter mAdapter;
+
+    public static ElementListFragment getInstance(String parentId) {
+        ElementListFragment f = new ElementListFragment();
+        Bundle args = new Bundle();
+        args.putString("parentId", parentId);
+        f.setArguments(args);
+        return f;
+    }
 
     public static Account CreateSyncAccount(Context context) {
         // Create the account type and default account
@@ -127,8 +137,13 @@ public class ElementListFragment extends ListFragment
 
     @Override
     public Loader<Cursor> onCreateLoader(int id, Bundle args) {
+        Object parentId = getArguments().get("parentId");
+        boolean parentIdIsEmpty = (parentId == null || parentId.toString().trim().length() == 0);
         CursorLoader cursorLoader = new CursorLoader(getActivity(),
-                CatalogContract.Element.CONTENT_URI, PROJECTION, null, null, CatalogContract.Element.TITLE + " desc");
+                CatalogContract.Element.CONTENT_URI, PROJECTION,
+                parentIdIsEmpty ? "parent_id is null" : "parent_id=?",
+                parentIdIsEmpty ? null : new String[]{(String) parentId},
+                CatalogContract.Element.TITLE + " desc");
         return cursorLoader;
     }
 
@@ -140,5 +155,19 @@ public class ElementListFragment extends ListFragment
     @Override
     public void onLoaderReset(Loader<Cursor> loader) {
         mAdapter.changeCursor(null);
+    }
+
+    @Override
+    public void onListItemClick(ListView l, View v, int position, long id) {
+        super.onListItemClick(l, v, position, id);
+
+        Cursor c = (Cursor) mAdapter.getItem(position);
+        String oid = c.getString(0); //c'os it _ID, right?
+        FragmentManager fragmentManager = getFragmentManager();
+        FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+        ElementListFragment fragment = ElementListFragment.getInstance(oid);
+        fragmentTransaction.replace(R.id.fragment_container, fragment);
+        fragmentTransaction.addToBackStack(null);
+        fragmentTransaction.commit();
     }
 }
