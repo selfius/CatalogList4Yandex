@@ -1,18 +1,20 @@
 package local.tai.cataloglist.sandbox;
 
+
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.Activity;
-import android.app.FragmentManager;
-import android.app.FragmentTransaction;
-import android.app.ListFragment;
-import android.app.LoaderManager;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.CursorLoader;
-import android.content.Loader;
 import android.database.Cursor;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentTransaction;
+import android.support.v4.app.ListFragment;
+import android.support.v4.app.LoaderManager;
+import android.support.v4.content.CursorLoader;
+import android.support.v4.content.Loader;
 import android.view.View;
 import android.widget.ListView;
 import android.widget.SimpleCursorAdapter;
@@ -27,10 +29,13 @@ public class ElementListFragment extends ListFragment
     public static final String ACCOUNT_TYPE = "local.tai.cataloglist";
     // The account name
     public static final String ACCOUNT = "dummyaccount";
+    public static final int ID_IDX = 0;
+    public static final int TITLE_IDX = 1;
+    public static final int IS_LEAF_IDX = 2;
     private static final String[] PROJECTION = new String[]{
             CatalogContract.Element._ID,
-            CatalogContract.Element.TITLE
-
+            CatalogContract.Element.TITLE,
+            CatalogContract.Element.IS_LEAF
     };
     /**
      * List of Cursor columns to read from when preparing an adapter to populate the ListView.
@@ -106,8 +111,16 @@ public class ElementListFragment extends ListFragment
 
     @Override
     public void onAttach(Activity activity) {
+
+
         super.onAttach(activity);
-        TriggerRefresh(CreateSyncAccount(activity));
+        boolean setupComplete = PreferenceManager
+                .getDefaultSharedPreferences(getActivity()).getBoolean("setup_complete", false);
+        if (!setupComplete) {
+            TriggerRefresh(CreateSyncAccount(activity));
+            PreferenceManager.getDefaultSharedPreferences(getActivity()).edit()
+                    .putBoolean("setup_complete", true).commit();
+        }
     }
 
     @Override
@@ -162,12 +175,24 @@ public class ElementListFragment extends ListFragment
         super.onListItemClick(l, v, position, id);
 
         Cursor c = (Cursor) mAdapter.getItem(position);
-        String oid = c.getString(0); //c'os it _ID, right?
-        FragmentManager fragmentManager = getFragmentManager();
-        FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
-        ElementListFragment fragment = ElementListFragment.getInstance(oid);
-        fragmentTransaction.replace(R.id.fragment_container, fragment);
-        fragmentTransaction.addToBackStack(null);
-        fragmentTransaction.commit();
+        if (c.getInt(IS_LEAF_IDX) == CatalogSyncAdapter.IS_CATEGORY) {
+            String oid = c.getString(ID_IDX); //c'os it _ID, right?
+            //FragmentManager fragmentManager = getActivity().getFragmentManager();
+            FragmentManager fragmentManager = getActivity().getSupportFragmentManager();
+            ElementListFragment fragment = ElementListFragment.getInstance(oid);
+            FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+
+
+            //Here we should replace the activity
+
+            fragmentTransaction.replace(R.id.fragment_container, fragment, oid);
+            fragmentTransaction.addToBackStack(null);
+
+            fragmentTransaction.commit();
+
+            //fragmentTransaction = fragmentManager.beginTransaction();
+            //fragmentManager.popBackStack();
+        }
+        boolean some = false;
     }
 }
