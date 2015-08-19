@@ -6,15 +6,20 @@ import android.accounts.AccountManager;
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.SyncStatusObserver;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v4.app.ListFragment;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.ListView;
 import android.widget.SimpleCursorAdapter;
@@ -50,6 +55,53 @@ public class ElementListFragment extends ListFragment
             android.R.id.text1
     };
     private SimpleCursorAdapter mAdapter;
+    /**
+     * Options menu used to populate ActionBar.
+     */
+    private Menu mOptionsMenu = null;
+    /**
+     * Crfate a new anonymous SyncStatusObserver. It's attached to the app's ContentResolver in
+     * onResume(), and removed in onPause(). If status changes, it sets the state of the Refresh
+     * button. If a sync is active or pending, the Refresh button is replaced by an indeterminate
+     * ProgressBar; otherwise, the button itself is displayed.
+     */
+    private SyncStatusObserver mSyncStatusObserver = new SyncStatusObserver() {
+        /** Callback invoked with the sync adapter status changes. */
+        @Override
+        public void onStatusChanged(int which) {
+            getActivity().runOnUiThread(new Runnable() {
+                /**
+                 * The SyncAdapter runs on a background thread. To update the UI, onStatusChanged()
+                 * runs on the UI thread.
+                 */
+                @Override
+                public void run() {
+                    Account account = new Account(ACCOUNT, ACCOUNT_TYPE);
+                    if (account == null) {
+
+                        setRefreshActionButtonState(false);
+                        return;
+                    }
+
+                    // Test the ContentResolver to see if the sync adapter is active or pending.
+                    // Set the state of the refresh button accordingly.
+                    boolean syncActive = ContentResolver.isSyncActive(
+                            account, CatalogContract.CONTENT_AUTHORITY);
+                    boolean syncPending = ContentResolver.isSyncPending(
+                            account, CatalogContract.CONTENT_AUTHORITY);
+                    setRefreshActionButtonState(syncActive || syncPending);
+                }
+            });
+        }
+    };
+    /**
+     * Handle to a SyncObserver. The ProgressBar element is visible until the SyncObserver reports
+     * that the sync is complete.
+     * <p/>
+     * <p>This allows us to delete our SyncObserver once the application is no longer in the
+     * foreground.
+     */
+    private Object mSyncObserverHandle;
 
     public static ElementListFragment getInstance(String parentId) {
         ElementListFragment f = new ElementListFragment();
@@ -194,5 +246,78 @@ public class ElementListFragment extends ListFragment
             //fragmentManager.popBackStack();
         }
         boolean some = false;
+    }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true);
+    }
+
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        super.onCreateOptionsMenu(menu, inflater);
+        mOptionsMenu = menu;
+        inflater.inflate(R.menu.menu, menu);
+    }
+
+    public void setRefreshActionButtonState(boolean refreshing) {
+        if (mOptionsMenu == null) {
+            return;
+        }
+
+        final MenuItem refreshItem = mOptionsMenu.findItem(R.id.menu_refresh);
+        if (refreshItem != null) {
+            if (refreshing) {
+                refreshItem.setActionView(R.layout.waiting_sync);
+            } else {
+                refreshItem.setActionView(null);
+            }
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        mSyncStatusObserver.onStatusChanged(0);
+
+        // Watch for sync state changes
+        final int mask = ContentResolver.SYNC_OBSERVER_TYPE_PENDING |
+                ContentResolver.SYNC_OBSERVER_TYPE_ACTIVE;
+        mSyncObserverHandle = ContentResolver.addStatusChangeListener(mask, mSyncStatusObserver);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (mSyncObserverHandle != null) {
+            ContentResolver.removeStatusChangeListener(mSyncObserverHandle);
+            mSyncObserverHandle = null;
+        }
+    }
+
+    /**
+     * Respond to user gestures on the ActionBar.
+     */
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            // If the user clicks the "Refresh" button.
+            case R.id.menu_refresh:
+                TriggerRefresh(new Account(ACCOUNT, ACCOUNT_TYPE));
+                FragmentManager fragmentManager = getActivity().getSupportFragmentManager();
+                FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+                for (int i = 0; i < fragmentManager.getBackStackEntryCount(); ++i) {
+                    fragmentManager.popBackStack();
+                }
+                //Fragment rootOne = fragmentManager.findFragmentByTag("rootOne");
+                //fragmentTransaction.add(R.id.fragment_container, rootOne, "rootOne");
+                Fragment rootOne = fragmentManager.findFragmentByTag("rootOne");
+                fragmentTransaction.detach(rootOne);
+                fragmentTransaction.attach(rootOne);
+                fragmentTransaction.commit();
+                return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 }

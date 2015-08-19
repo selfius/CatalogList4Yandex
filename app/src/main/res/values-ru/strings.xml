@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Каталог</string>
+    <string name="description_refresh">Обновить</string>
+    <string name="loading">Загрузка...</string>
+</resources>
