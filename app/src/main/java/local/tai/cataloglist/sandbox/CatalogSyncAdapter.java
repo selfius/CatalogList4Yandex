@@ -18,7 +18,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -32,12 +31,14 @@ import local.tai.cataloglist.sandbox.provider.CatalogContract;
  */
 public class CatalogSyncAdapter extends AbstractThreadedSyncAdapter {
 
-    public static final int IS_LEAF = 1;
     public static final int IS_CATEGORY = 0;
+    private static final int IS_LEAF = 1;
+    private static final String SOURCE_URL = "https://money.yandex.ru/api/categories-list";
+
     private final ContentResolver mContentResolver;
 
-    public CatalogSyncAdapter(Context context, boolean autoInitialize) {
-        super(context, autoInitialize);
+    public CatalogSyncAdapter(Context context) {
+        super(context, true);
         mContentResolver = context.getContentResolver();
     }
 
@@ -45,13 +46,10 @@ public class CatalogSyncAdapter extends AbstractThreadedSyncAdapter {
     public void onPerformSync(Account account, Bundle extras, String authority, ContentProviderClient provider, SyncResult syncResult) {
         HttpURLConnection urlConnection = null;
         try {
-            URL sourceDataUrl = new URL("https://money.yandex.ru/api/categories-list");
+            URL sourceDataUrl = new URL(SOURCE_URL);
             urlConnection = (HttpURLConnection) sourceDataUrl.openConnection();
             InputStream is = new BufferedInputStream(urlConnection.getInputStream());
             handleJSONStream(is);
-        } catch (MalformedURLException e) {
-            //will never happen
-            throw new RuntimeException(e);
         } catch (IOException e) {
             //todo we should try to handle this somehow (let the user know we're out of connection)
             throw new RuntimeException(e);
@@ -62,8 +60,7 @@ public class CatalogSyncAdapter extends AbstractThreadedSyncAdapter {
         }
     }
 
-    protected void handleJSONStream(InputStream is) throws UnsupportedEncodingException {
-        //todo parse with JSONReader here, and put them to db i think
+    private void handleJSONStream(InputStream is) throws UnsupportedEncodingException {
         JsonReader jsonReader = new JsonReader(new InputStreamReader(is, "UTF-8"));
         ArrayList<ContentProviderOperation> batch = new ArrayList<>();
         try {
@@ -82,20 +79,14 @@ public class CatalogSyncAdapter extends AbstractThreadedSyncAdapter {
                     CatalogContract.Element.CONTENT_URI,
                     null,
                     false);
-        } catch (IOException e) {
-            //todo malformed json retrieved
-            throw new RuntimeException(e);
-        } catch (RemoteException e) {
-            //todo this will go away after refactoring
-            throw new RuntimeException(e);
-        } catch (OperationApplicationException e) {
+        } catch (IOException | RemoteException | OperationApplicationException e) {
             throw new RuntimeException(e);
         }
     }
 
-    protected List<ContentProviderOperation> takeCareOfItem(JsonReader reader,
-                                                            Item parentItem,
-                                                            final int backReferenceIndex)
+    private List<ContentProviderOperation> takeCareOfItem(JsonReader reader,
+                                                          Item parentItem,
+                                                          final int backReferenceIndex)
             throws IOException {
         List<ContentProviderOperation> operationList = new LinkedList<>();
 
@@ -109,33 +100,30 @@ public class CatalogSyncAdapter extends AbstractThreadedSyncAdapter {
         the main list of operations*/
 
         reader.beginObject();
-        item.setParentItem(parentItem);
         int currentItemBackReferenceIndex = backReferenceIndex + 1;
         while (reader.hasNext()) {
             String name = reader.nextName();
 
             if ("title".equals(name)) {
-                item.setTitle(reader.nextString());
+                item.title = reader.nextString();
             } else if ("id".equals(name)) {
-                item.setYandexId(reader.nextInt());
+                item.yandexId = reader.nextInt();
             } else if ("subs".equals(name)) {
                 reader.beginArray();
                 while (reader.hasNext()) {
                     List<ContentProviderOperation> innerItems = takeCareOfItem(reader, item, currentItemBackReferenceIndex);
                     innerOperations.addAll(innerItems);
-                    //currentItemBackReferenceIndex+=innerItems.size();
                 }
                 reader.endArray();
             } else {
                 reader.skipValue();
-                //todo just log this
             }
         }
         reader.endObject();
 
         ContentProviderOperation.Builder builder = ContentProviderOperation.newInsert(CatalogContract.Element.CONTENT_URI)
-                .withValue(CatalogContract.Element.TITLE, item.getTitle())
-                .withValue(CatalogContract.Element.YANDEX_ID, item.getYandexId())
+                .withValue(CatalogContract.Element.TITLE, item.title)
+                .withValue(CatalogContract.Element.YANDEX_ID, item.yandexId)
                 .withValue(CatalogContract.Element.IS_LEAF, innerOperations.size() > 0 ? IS_CATEGORY : IS_LEAF);
         if (parentItem != null) {
             builder.withValueBackReference(CatalogContract.Element.PARENT_ID, backReferenceIndex);
@@ -147,33 +135,9 @@ public class CatalogSyncAdapter extends AbstractThreadedSyncAdapter {
     }
 
     private class Item {
-
+        /* this is a simple struct for the single json object...
+        don't think we need a ton of getters/setters here actually*/
         String title;
         Integer yandexId;
-        Item parentItem;
-
-        public String getTitle() {
-            return title;
-        }
-
-        public void setTitle(String title) {
-            this.title = title;
-        }
-
-        public Integer getYandexId() {
-            return yandexId;
-        }
-
-        public void setYandexId(Integer yandexId) {
-            this.yandexId = yandexId;
-        }
-
-        public Item getParentItem() {
-            return parentItem;
-        }
-
-        public void setParentItem(Item parentItem) {
-            this.parentItem = parentItem;
-        }
     }
 }

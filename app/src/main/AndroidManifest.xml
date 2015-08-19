@@ -31,8 +31,8 @@
             android:exported="false" />
 
         <service
-            android:name=".service.SomeService"
-            android:exported="true">
+            android:name=".service.SyncService"
+            android:exported="false">
             <!-- This intent filter is required. It allows the system to launch our sync service
             as needed. -->
             <intent-filter>
@@ -44,7 +44,9 @@
                 android:resource="@xml/syncadapter" />
         </service>
 
-        <service android:name=".service.AuthenticatorService">
+        <service
+            android:name=".service.AuthenticatorService"
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.accounts.AccountAuthenticator" />
             </intent-filter>

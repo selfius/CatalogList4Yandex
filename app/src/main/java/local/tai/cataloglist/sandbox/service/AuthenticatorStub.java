@@ -8,9 +8,10 @@ import android.content.Context;
 import android.os.Bundle;
 
 /**
- * Created by tai on 8/10/2015.
+ * Authenticator Stub
+ * We do not really need authentication, but api enforces us to have one
  */
-public class AuthenticatorStub extends AbstractAccountAuthenticator {
+class AuthenticatorStub extends AbstractAccountAuthenticator {
 
     public AuthenticatorStub(Context context) {
         super(context);

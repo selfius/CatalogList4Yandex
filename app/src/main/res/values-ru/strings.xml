@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">Каталог</string>
     <string name="description_refresh">Обновить</string>
-    <string name="loading">Загрузка...</string>
+    <string name="loading">Загрузка…</string>
 </resources>

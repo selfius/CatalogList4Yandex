@@ -26,46 +26,44 @@ import android.widget.SimpleCursorAdapter;
 
 import local.tai.cataloglist.sandbox.provider.CatalogContract;
 
-
+/**
+ * Main fragment component for the application.
+ * Displays lists of items in the given catalog
+ */
 public class ElementListFragment extends ListFragment
         implements LoaderManager.LoaderCallbacks<Cursor> {
+    /*this is unit is the most complex, i think i should break it down*/
 
+    //TAG for topmost fragment
+    public static final String ROOT_FRAGMENT_TAG = "rootOne";
     // An account type, in the form of a domain name
-    public static final String ACCOUNT_TYPE = "local.tai.cataloglist";
+    private static final String ACCOUNT_TYPE = "local.tai.cataloglist";
     // The account name
-    public static final String ACCOUNT = "dummyaccount";
-    public static final int ID_IDX = 0;
-    public static final int TITLE_IDX = 1;
-    public static final int IS_LEAF_IDX = 2;
+    private static final String ACCOUNT = "dummyaccount";
+    //field indexes in query result sets
+    private static final int ID_IDX = 0;
+    @SuppressWarnings("unused")
+    private static final int TITLE_IDX = 1;
+    private static final int IS_LEAF_IDX = 2;
     private static final String[] PROJECTION = new String[]{
             CatalogContract.Element._ID,
             CatalogContract.Element.TITLE,
             CatalogContract.Element.IS_LEAF
     };
-    /**
-     * List of Cursor columns to read from when preparing an adapter to populate the ListView.
-     */
+    // List of Cursor columns to read from when preparing an adapter to populate the ListView.
     private static final String[] FROM_COLUMNS = new String[]{
             CatalogContract.Element.TITLE
     };
-    /**
-     * List of Views which will be populated by Cursor data.
-     */
+    //List of Views which will be populated by Cursor data.
     private static final int[] TO_FIELDS = new int[]{
             android.R.id.text1
     };
-    private SimpleCursorAdapter mAdapter;
-    /**
-     * Options menu used to populate ActionBar.
-     */
+    //Key in shared preferences that shows whether it's first application launch or not
+    private static final String SETUP_COMPLETE = "setup_complete";
+    //just a key to store parent id value in a bundle, take a look at the method below
+    private static final String PARENT_ID = "parentId";
     private Menu mOptionsMenu = null;
-    /**
-     * Crfate a new anonymous SyncStatusObserver. It's attached to the app's ContentResolver in
-     * onResume(), and removed in onPause(). If status changes, it sets the state of the Refresh
-     * button. If a sync is active or pending, the Refresh button is replaced by an indeterminate
-     * ProgressBar; otherwise, the button itself is displayed.
-     */
-    private SyncStatusObserver mSyncStatusObserver = new SyncStatusObserver() {
+    private final SyncStatusObserver mSyncStatusObserver = new SyncStatusObserver() {
         /** Callback invoked with the sync adapter status changes. */
         @Override
         public void onStatusChanged(int which) {
@@ -77,14 +75,6 @@ public class ElementListFragment extends ListFragment
                 @Override
                 public void run() {
                     Account account = new Account(ACCOUNT, ACCOUNT_TYPE);
-                    if (account == null) {
-
-                        setRefreshActionButtonState(false);
-                        return;
-                    }
-
-                    // Test the ContentResolver to see if the sync adapter is active or pending.
-                    // Set the state of the refresh button accordingly.
                     boolean syncActive = ContentResolver.isSyncActive(
                             account, CatalogContract.CONTENT_AUTHORITY);
                     boolean syncPending = ContentResolver.isSyncPending(
@@ -94,84 +84,61 @@ public class ElementListFragment extends ListFragment
             });
         }
     };
-    /**
-     * Handle to a SyncObserver. The ProgressBar element is visible until the SyncObserver reports
-     * that the sync is complete.
-     * <p/>
-     * <p>This allows us to delete our SyncObserver once the application is no longer in the
-     * foreground.
-     */
     private Object mSyncObserverHandle;
+    private SimpleCursorAdapter mAdapter;
 
+    /**
+     * This is a some kind of helper method to create fragment instance correctly
+     * and pass ID argument to it
+     *
+     * @param parentId pass here id of the catalog content of which you want to display in this fragment
+     * @return fragment instance
+     */
     public static ElementListFragment getInstance(String parentId) {
         ElementListFragment f = new ElementListFragment();
         Bundle args = new Bundle();
-        args.putString("parentId", parentId);
+        args.putString(PARENT_ID, parentId);
         f.setArguments(args);
         return f;
     }
 
-    public static Account CreateSyncAccount(Context context) {
-        // Create the account type and default account
+    /**
+     * Helper method to create account and make sure the account/provider is syncable
+     *
+     * @param context execution context
+     * @return account
+     */
+    private static Account CreateSyncAccount(Context context) {
         Account newAccount = new Account(
                 ACCOUNT, ACCOUNT_TYPE);
-        // Get an instance of the Android account manager
         AccountManager accountManager =
                 (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
-        /*
-         * Add the account and account type, no password or user data
-         * If successful, return the Account object, otherwise report an error.
-         */
         if (accountManager.addAccountExplicitly(newAccount, null, null)) {
             ContentResolver.setIsSyncable(newAccount, CatalogContract.CONTENT_AUTHORITY, 1);
-            // Inform the system that this account is eligible for auto sync when the network is up
-            ContentResolver.setSyncAutomatically(newAccount, CatalogContract.CONTENT_AUTHORITY, true);
-            // Recommend a schedule for automatic synchronization. The system may modify this based
-            // on other scheduled syncs and network utilization.
-            ContentResolver.addPeriodicSync(
-                    newAccount, CatalogContract.CONTENT_AUTHORITY, new Bundle(), 60 * 60);
-        } else {
-            /*
-             * The account exists or some other error occurred. Log this, report it,
-             * or handle it internally.
-             */
         }
         return newAccount;
     }
 
     /**
-     * Helper method to trigger an immediate sync ("refresh").
-     * <p/>
-     * <p>This should only be used when we need to preempt the normal sync schedule. Typically, this
-     * means the user has pressed the "refresh" button.
-     * <p/>
-     * Note that SYNC_EXTRAS_MANUAL will cause an immediate sync, without any optimization to
-     * preserve battery life. If you know new data is available (perhaps via a GCM notification),
-     * but the user is not actively waiting for that data, you should omit this flag; this will give
-     * the OS additional freedom in scheduling your sync request.
+     * Helper method to trigger an immediate sync ("refresh")
      */
-    public static void TriggerRefresh(Account account) {
+    private static void TriggerRefresh(Account account) {
         Bundle b = new Bundle();
-        // Disable sync backoff and ignore sync preferences. In other words...perform sync NOW!
         b.putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true);
         b.putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true);
-        ContentResolver.requestSync(
-                account, // Sync account
-                CatalogContract.CONTENT_AUTHORITY,                 // Content authority
-                b);                                             // Extras
+        ContentResolver.requestSync(account, CatalogContract.CONTENT_AUTHORITY, b);
     }
 
     @Override
     public void onAttach(Activity activity) {
-
-
         super.onAttach(activity);
         boolean setupComplete = PreferenceManager
-                .getDefaultSharedPreferences(getActivity()).getBoolean("setup_complete", false);
+                .getDefaultSharedPreferences(getActivity()).getBoolean(SETUP_COMPLETE, false);
         if (!setupComplete) {
+
             TriggerRefresh(CreateSyncAccount(activity));
             PreferenceManager.getDefaultSharedPreferences(getActivity()).edit()
-                    .putBoolean("setup_complete", true).commit();
+                    .putBoolean(SETUP_COMPLETE, true).commit();
         }
     }
 
@@ -179,37 +146,23 @@ public class ElementListFragment extends ListFragment
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         mAdapter = new SimpleCursorAdapter(
-                getActivity(),       // Current context
-                android.R.layout.simple_list_item_activated_2,  // Layout for individual rows
-                null,                // Cursor
-                FROM_COLUMNS,        // Cursor columns to use
-                TO_FIELDS,           // Layout fields to use
-                0                    // No flags
+                getActivity(),
+                android.R.layout.simple_list_item_activated_2, null, FROM_COLUMNS, TO_FIELDS, 0
         );
-        mAdapter.setViewBinder(new SimpleCursorAdapter.ViewBinder() {
-            @Override
-            public boolean setViewValue(View view, Cursor cursor, int i) {
-
-                // Let SimpleCursorAdapter handle other fields automatically
-                return false;
-            }
-        });
         setListAdapter(mAdapter);
-        setEmptyText("Loading");
+        setEmptyText(getString(R.string.loading));
         getLoaderManager().initLoader(0, null, this);
-
     }
 
     @Override
     public Loader<Cursor> onCreateLoader(int id, Bundle args) {
-        Object parentId = getArguments().get("parentId");
+        Object parentId = getArguments().get(PARENT_ID);
         boolean parentIdIsEmpty = (parentId == null || parentId.toString().trim().length() == 0);
-        CursorLoader cursorLoader = new CursorLoader(getActivity(),
+        return new CursorLoader(getActivity(),
                 CatalogContract.Element.CONTENT_URI, PROJECTION,
-                parentIdIsEmpty ? "parent_id is null" : "parent_id=?",
+                CatalogContract.Element.PARENT_ID + (parentIdIsEmpty ? " is null" : "=?"),
                 parentIdIsEmpty ? null : new String[]{(String) parentId},
                 CatalogContract.Element.TITLE + " desc");
-        return cursorLoader;
     }
 
     @Override
@@ -228,24 +181,14 @@ public class ElementListFragment extends ListFragment
 
         Cursor c = (Cursor) mAdapter.getItem(position);
         if (c.getInt(IS_LEAF_IDX) == CatalogSyncAdapter.IS_CATEGORY) {
-            String oid = c.getString(ID_IDX); //c'os it _ID, right?
-            //FragmentManager fragmentManager = getActivity().getFragmentManager();
+            String oid = c.getString(ID_IDX);
             FragmentManager fragmentManager = getActivity().getSupportFragmentManager();
             ElementListFragment fragment = ElementListFragment.getInstance(oid);
             FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
-
-
-            //Here we should replace the activity
-
             fragmentTransaction.replace(R.id.fragment_container, fragment, oid);
             fragmentTransaction.addToBackStack(null);
-
             fragmentTransaction.commit();
-
-            //fragmentTransaction = fragmentManager.beginTransaction();
-            //fragmentManager.popBackStack();
         }
-        boolean some = false;
     }
 
     @Override
@@ -261,7 +204,7 @@ public class ElementListFragment extends ListFragment
         inflater.inflate(R.menu.menu, menu);
     }
 
-    public void setRefreshActionButtonState(boolean refreshing) {
+    private void setRefreshActionButtonState(boolean refreshing) {
         if (mOptionsMenu == null) {
             return;
         }
@@ -280,8 +223,6 @@ public class ElementListFragment extends ListFragment
     public void onResume() {
         super.onResume();
         mSyncStatusObserver.onStatusChanged(0);
-
-        // Watch for sync state changes
         final int mask = ContentResolver.SYNC_OBSERVER_TYPE_PENDING |
                 ContentResolver.SYNC_OBSERVER_TYPE_ACTIVE;
         mSyncObserverHandle = ContentResolver.addStatusChangeListener(mask, mSyncStatusObserver);
@@ -296,9 +237,6 @@ public class ElementListFragment extends ListFragment
         }
     }
 
-    /**
-     * Respond to user gestures on the ActionBar.
-     */
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
@@ -308,11 +246,11 @@ public class ElementListFragment extends ListFragment
                 FragmentManager fragmentManager = getActivity().getSupportFragmentManager();
                 FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
                 for (int i = 0; i < fragmentManager.getBackStackEntryCount(); ++i) {
+                    //we should clear backstack
                     fragmentManager.popBackStack();
                 }
-                //Fragment rootOne = fragmentManager.findFragmentByTag("rootOne");
-                //fragmentTransaction.add(R.id.fragment_container, rootOne, "rootOne");
-                Fragment rootOne = fragmentManager.findFragmentByTag("rootOne");
+
+                Fragment rootOne = fragmentManager.findFragmentByTag(ROOT_FRAGMENT_TAG);
                 fragmentTransaction.detach(rootOne);
                 fragmentTransaction.attach(rootOne);
                 fragmentTransaction.commit();
@@ -320,4 +258,5 @@ public class ElementListFragment extends ListFragment
         }
         return super.onOptionsItemSelected(item);
     }
+
 }

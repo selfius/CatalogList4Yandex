@@ -1,4 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.Base" parent="android:Theme.Material.Light"></style>
+    <!-- not a big deal, but the standard themes on pre-lollipop builds is just awful,
+     want to look at something pretty while debugging it :) -->
+    <style name="Theme.Base" parent="android:Theme.Material.Light" />
 </resources>

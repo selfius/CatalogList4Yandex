@@ -5,7 +5,8 @@ import android.content.Intent;
 import android.os.IBinder;
 
 /**
- * Created by tai on 8/10/2015.
+ * Authenticator Service
+ * We do not really need authentication, but api enforces us to have one
  */
 public class AuthenticatorService extends Service {
 

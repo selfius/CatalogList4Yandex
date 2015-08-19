@@ -7,19 +7,27 @@ import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 
-import local.tai.cataloglist.sandbox.toremove.SelectionBuilder;
-
 /**
- * Created by tai on 8/9/2015.
+ * Data provider for our catalog items
  */
 public class CatalogDataProvider extends ContentProvider {
 
-    public static final int ITEM = 1;
-    public static final int ITEMS_ID = 2;
+    /**
+     * code for request for a bunch of items
+     */
+    private static final int ITEM = 1;
+
+    /**
+     * code for a single item request
+     */
+    private static final int ITEMS_ID = 2;
+
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-    static CatalogDatabase databaseHelper;
+
+    private static CatalogDatabase databaseHelper;
 
     static {
         sUriMatcher.addURI(CatalogContract.CONTENT_AUTHORITY, CatalogContract.CATALOG_PATH, ITEM);
@@ -35,22 +43,17 @@ public class CatalogDataProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
         SQLiteDatabase db = databaseHelper.getReadableDatabase();
-        SelectionBuilder builder = new SelectionBuilder();
+        SQLiteQueryBuilder sqliteBuilder = new SQLiteQueryBuilder();
+
         int uriMatch = sUriMatcher.match(uri);
         switch (uriMatch) {
             case ITEMS_ID:
-                // Return a single entry, by ID.
                 String id = uri.getLastPathSegment();
-                builder.where(CatalogContract.Element._ID + "=?", id);
+                sqliteBuilder.appendWhere(CatalogContract.Element._ID + "=" + id);
             case ITEM:
-                // Return all known entries.
-                builder.table(CatalogContract.TABLE_NAME)
-                        .where(selection, selectionArgs);
-                Cursor c = builder.query(db, projection, sortOrder);
-                // Note: Notification URI must be manually set here for loaders to correctly
-                // register ContentObservers.
+                sqliteBuilder.setTables(CatalogContract.TABLE_NAME);
+                Cursor c = sqliteBuilder.query(db, projection, selection, selectionArgs, null, null, sortOrder);
                 Context ctx = getContext();
-                assert ctx != null;
                 c.setNotificationUri(ctx.getContentResolver(), uri);
                 return c;
             default:
@@ -88,70 +91,43 @@ public class CatalogDataProvider extends ContentProvider {
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
-        // Send broadcast to registered ContentObservers, to refresh UI.
         Context ctx = getContext();
-        assert ctx != null;
         ctx.getContentResolver().notifyChange(uri, null, false);
+        //notifying ui that something changed here
         return result;
     }
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        SelectionBuilder builder = new SelectionBuilder();
         final SQLiteDatabase db = databaseHelper.getWritableDatabase();
         final int match = sUriMatcher.match(uri);
         int count;
         switch (match) {
             case ITEM:
-                count = builder.table(CatalogContract.TABLE_NAME)
-                        .where(selection, selectionArgs)
-                        .delete(db);
+                count = db.delete(CatalogContract.TABLE_NAME, null, null);
+                //we have just one case now, we have to erase ALL of the data,
+                //in REAL world we shouldn't ignore selection and selectionArgs
                 break;
-            case ITEMS_ID:
-                String id = uri.getLastPathSegment();
-                count = builder.table(CatalogContract.TABLE_NAME)
-                        .where(CatalogContract.Element._ID + "=?", id)
-                        .where(selection, selectionArgs)
-                        .delete(db);
-                break;
+
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
-        // Send broadcast to registered ContentObservers, to refresh UI.
         Context ctx = getContext();
-        assert ctx != null;
         ctx.getContentResolver().notifyChange(uri, null, false);
+        //notifying ui that something changed here
         return count;
     }
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        SelectionBuilder builder = new SelectionBuilder();
-        final SQLiteDatabase db = databaseHelper.getWritableDatabase();
-        final int match = sUriMatcher.match(uri);
-        int count;
-        switch (match) {
-            case ITEM:
-                count = builder.table(CatalogContract.TABLE_NAME)
-                        .where(selection, selectionArgs)
-                        .update(db, values);
-                break;
-            case ITEMS_ID:
-                String id = uri.getLastPathSegment();
-                count = builder.table(CatalogContract.TABLE_NAME)
-                        .where(CatalogContract.Element._ID + "=?", id)
-                        .where(selection, selectionArgs)
-                        .update(db, values);
-                break;
-            default:
-                throw new UnsupportedOperationException("Unknown uri: " + uri);
-        }
-        Context ctx = getContext();
-        assert ctx != null;
-        ctx.getContentResolver().notifyChange(uri, null, false);
-        return count;
+        //we do not need update data right now, it's only about inserts and deleting everything under the Sun
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    /**
+     * Helper for out db, manages creation and migration between versions
+     * This is a very simple implementation
+     */
     static class CatalogDatabase extends SQLiteOpenHelper {
 
         public static final int VERSION = 1;
