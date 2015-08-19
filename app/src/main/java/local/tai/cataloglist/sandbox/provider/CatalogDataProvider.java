@@ -154,15 +154,17 @@ public class CatalogDataProvider extends ContentProvider {
 
     static class CatalogDatabase extends SQLiteOpenHelper {
 
-        public static final int VERSION = 2;
+        public static final int VERSION = 1;
         public static final String DB_NAME = "catalogs";
 
         public static final String CREATE_SCHEMA =
                 "CREATE TABLE " + CatalogContract.TABLE_NAME + " (" +
-                        CatalogContract.Element._ID + " INTEGER PRIMARY KEY," +
+                        CatalogContract.Element._ID + " INTEGER PRIMARY KEY, " +
                         CatalogContract.Element.TITLE + " TEXT, " +
-                        CatalogContract.Element.YANDEX_ID + " INTEGER UNIQUE," +
-                        CatalogContract.Element.PARENT_ID + " INTEGER)";
+                        CatalogContract.Element.YANDEX_ID + " INTEGER UNIQUE, " +
+                        CatalogContract.Element.PARENT_ID + " INTEGER, " +
+                        CatalogContract.Element.IS_LEAF + " INTEGER, " +
+                        "FOREIGN KEY(" + CatalogContract.Element.PARENT_ID + ") REFERENCES " + CatalogContract.TABLE_NAME + "(" + CatalogContract.Element._ID + "))";
         public static final String DROP_SCHEMA = "DROP TABLE IF EXISTS " + CatalogContract.TABLE_NAME;
 
         public CatalogDatabase(Context context) {

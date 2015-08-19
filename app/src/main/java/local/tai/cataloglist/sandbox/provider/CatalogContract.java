@@ -34,5 +34,7 @@ public class CatalogContract {
 
         String PARENT_ID = "parent_id";
 
+        String IS_LEAF = "is_leaf";
+
     }
 }
